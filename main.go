@@ -1,6 +1,7 @@
 package main
 
 import (
+	//	_ "cnsoftbei/mqtt"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -9,19 +10,30 @@ import (
 	"net/http"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/robfig/cron"
 )
 
+var httpport = ":9999"
+
 type medicine struct {
-	Amount        uint
-	E_time        string
-	Id            uint
-	Medicine_name string
-	S_time        string
-	Times         uint
-	BaseObjId     int16
+	Amount       uint
+	Etime        string
+	ID           uint
+	MedicineName string
+	Stime        string
+	Times        uint
+	BaseObjID    int16
 }
 
 var db *sql.DB
+
+func remind() {
+}
+
+func checkMedicine() {
+	_, err := db.Prepare("DELETE * FROM remind WHERE e_time<DATE(NOW())")
+	checkErr(err)
+}
 
 func sayhelloName(w http.ResponseWriter, r *http.Request) {
 	var med []medicine
@@ -45,7 +57,7 @@ func sayhelloName(w http.ResponseWriter, r *http.Request) {
 		stmt, err = db.Prepare("INSERT remind SET medicine_name=?,s_time=?,e_time=?,times=?,amount=?")
 		checkErr(err)
 
-		res, err = stmt.Exec(med[i].Medicine_name, med[i].S_time, med[i].E_time, med[i].Times, med[i].Amount)
+		res, err = stmt.Exec(med[i].MedicineName, med[i].Stime, med[i].Etime, med[i].Times, med[i].Amount)
 		checkErr(err)
 
 		id, err := res.LastInsertId()
@@ -56,10 +68,22 @@ func sayhelloName(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	var err error
+
+	c := cron.New()
+	specCheckMedicine := "0 0 0 1/1 * * *" //设定每天早上检查药品是否过期
+	specRemind := "0 0 7,12,19 * * *"      //设定每天提醒时间
+
+	c.AddFunc(specCheckMedicine, checkMedicine)
+	c.AddFunc(specRemind, remind)
+	c.Start()
+
+	//链接数据库
 	db, err = sql.Open("mysql", "root:root@tcp(localhost:3306)/cnsoftbei?charset=utf8")
 	checkErr(err)
+
+	//开始http监听
 	http.HandleFunc("/", sayhelloName)
-	err = http.ListenAndServe(":9090", nil)
+	err = http.ListenAndServe(httpport, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
