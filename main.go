@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/robfig/cron"
@@ -34,44 +35,44 @@ type remind struct {
 var db *sql.DB
 
 func remindTime() {
-	var remindStruct []remind
-	i := 0
+	fmt.Println(time.Now())
+	var reminds []remind
 	rows, err := db.Query("SELECT medicine_name,times,amount FROM remind WHERE s_time<=DATE(NOW())")
 	checkErr(err)
 
-	// Get column names
-	columns, err := rows.Columns()
-	if err != nil {
-		panic(err.Error()) // proper error handling instead of panic in your app
-	}
-
-	// Make a slice for the values
-	values := make([]sql.RawBytes, len(columns))
-	fmt.Println(len(values))
-
-	// rows.Scan wants '[]interface{}' as an argument, so we must copy the
-	// references into such a slice
-	// See http://code.google.com/p/go-wiki/wiki/InterfaceSlice for details
-	scanArgs := make([]interface{}, len(values))
-	for i := range values {
-		scanArgs[i] = &values[i]
-	}
-
+	// Fetch rows
 	for rows.Next() {
-		fmt.Println("fadfasdfasdfsa")
-		err = rows.Scan(&remindStruct[i].MedicineName, &remindStruct[i].Times, &remindStruct[i].Amount)
-		checkErr(err)
-		fmt.Println(remindStruct[i].MedicineName)
-		i++
+		var amount uint
+		var medicineName string
+		var times uint
+
+		var newRemind remind
+
+		err = rows.Scan(&medicineName, &times, &amount)
+		if err != nil {
+			panic(err.Error()) // proper error handling instead of panic in your app
+		}
+
+		newRemind.Amount = amount
+		newRemind.MedicineName = medicineName
+		newRemind.Times = times
+		reminds = append(reminds, newRemind)
+
 	}
-	remindJson, err := json.Marshal(remindStruct)
-	remindJsonIndent, err := json.MarshalIndent(remindStruct, "", "     ")
+
+	log.Println(reminds)
+
+	remindJson, err := json.Marshal(reminds)
+	checkErr(err)
+	remindJsonIndent, err := json.MarshalIndent(reminds, "", "     ")
+	checkErr(err)
 	fmt.Println(remindJson)
-	fmt.Println(remindJsonIndent)
+	fmt.Println(string(remindJsonIndent))
 }
 
 func checkMedicine() {
-	stmt, err := db.Prepare("DELETE * FROM remind WHERE e_time<DATE(NOW())")
+	stmt, err := db.Prepare("DELETE FROM remind WHERE e_time<DATE(NOW())")
+	checkErr(err)
 	_, err = stmt.Exec()
 	checkErr(err)
 }
@@ -118,17 +119,15 @@ func main() {
 	if err != nil {
 		panic(err.Error()) // proper error handling instead of panic in your app
 	}
-	remindTime()
 
 	c := cron.New()
-	specCheckMedicine := "0 0 0 0/1 * *" //设定每天早上检查药品是否过期
-	//specRemind := "0 0 7,12,19 * * *"      //设定每天提醒时间
-	specRemind := "0 */1 * * * *" //设定每天提醒时间
+	specCheckMedicine := "0 0 0 * * *" //设定每天早上检查药品是否过期
+	specRemind := "0 0 7,12,19 * * *"  //设定每天提醒时间
+	//specRemind := "0 */1 * * * *" //设定每天提醒时间
 
 	c.AddFunc(specCheckMedicine, checkMedicine)
 	c.AddFunc(specRemind, remindTime)
 	c.Start()
-	fmt.Println("ffffffffffffffffffffffffffffffffffff")
 
 	//开始http监听
 	http.HandleFunc("/", sayhelloName)
