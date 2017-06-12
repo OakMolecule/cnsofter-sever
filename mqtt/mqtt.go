@@ -2,21 +2,20 @@ package mqtt
 
 import (
 	"flag"
+	"fmt"
 
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 )
 
+var client MQTT.Client
+
 func init() {
-	topic := flag.String("topic", "/raspberry/medicine", "The topic name to/from which to publish/subscribe")
-	broker := flag.String("broker", "tcp://127.0.0.1:1883", "")
+	broker := flag.String("broker", "tcp://iot.celitea.cn:1883", "")
 	password := flag.String("password", "", "The password (optional)")
 	user := flag.String("user", "", "The User (optional)")
 	id := flag.String("id", "testgoid", "The ClientID (optional)")
 	cleansess := flag.Bool("clean", false, "Set Clean Session (default false)")
-	qos := flag.Int("qos", 0, "The Quality of Service 0,1,2 (default 0)")
-	num := flag.Int("num", 1, "The number of messages to publish or subscribe (default 1)")
-	payload := flag.String("message", "hhhhhhhhhhh", "The message text to publish (default empty)")
-	action := flag.String("action", "", "Action publish or subscribe (required)")
+	// payload := flag.String("message", "hhhhhhhhhhh", "The message text to publish (default empty)")
 	store := flag.String("store", ":memory:", "The Store Directory (default use memory store)")
 	flag.Parse()
 
@@ -30,8 +29,18 @@ func init() {
 		opts.SetStore(MQTT.NewFileStore(*store))
 	}
 
-	client := MQTT.NewClient(opts)
+	client = MQTT.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
+	}
+}
+
+func RemindEatMedicine(payload string) {
+	fmt.Println(payload)
+	topic := flag.String("topic", "/raspberry/medicine", "The topic name to/from which to publish/subscribe")
+	qos := flag.Int("qos", 0, "The Quality of Service 0,1,2 (default 0)")
+	token := client.Publish(*topic, byte(*qos), false, payload)
+	if token.Error() != nil {
+		fmt.Println(token.Error())
 	}
 }

@@ -1,7 +1,7 @@
 package main
 
 import (
-	//	_ "cnsoftbei/mqtt"
+	"cnsoftbei/mqtt"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -64,6 +64,7 @@ func remindTime() {
 
 	remindJson, err := json.Marshal(reminds)
 	checkErr(err)
+	mqtt.RemindEatMedicine(string(remindJson))
 	remindJsonIndent, err := json.MarshalIndent(reminds, "", "     ")
 	checkErr(err)
 	fmt.Println(remindJson)
