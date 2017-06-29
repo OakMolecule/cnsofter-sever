@@ -57,7 +57,6 @@ func remindTime() {
 		newRemind.MedicineName = medicineName
 		newRemind.Times = times
 		reminds = append(reminds, newRemind)
-
 	}
 
 	log.Println(reminds)
@@ -78,7 +77,8 @@ func checkMedicine() {
 	checkErr(err)
 }
 
-func sayhelloName(w http.ResponseWriter, r *http.Request) {
+// 更新数据库中的提醒信息
+func updateMedicine(w http.ResponseWriter, r *http.Request) {
 	var med []medicine
 	r.ParseForm()
 	fmt.Println(r.Host)
@@ -124,14 +124,14 @@ func main() {
 	c := cron.New()
 	specCheckMedicine := "0 0 0 * * *" //设定每天早上检查药品是否过期
 	specRemind := "0 0 7,12,19 * * *"  //设定每天提醒时间
-	//specRemind := "0 */1 * * * *" //设定每天提醒时间
+	//specRemind := "0 */1 * * * *" 	//每分钟执行一次
 
 	c.AddFunc(specCheckMedicine, checkMedicine)
 	c.AddFunc(specRemind, remindTime)
 	c.Start()
 
 	//开始http监听
-	http.HandleFunc("/", sayhelloName)
+	http.HandleFunc("/", updateMedicine)
 	err = http.ListenAndServe(httpport, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
