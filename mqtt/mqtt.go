@@ -10,7 +10,7 @@ import (
 var client MQTT.Client
 
 func init() {
-	broker := flag.String("broker", "tcp://iot.celitea.cn:1883", "")
+	broker := flag.String("broker", "tcp://115.28.142.203:1883", "")
 	password := flag.String("password", "", "The password (optional)")
 	user := flag.String("user", "", "The User (optional)")
 	id := flag.String("id", "testgoid", "The ClientID (optional)")

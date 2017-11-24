@@ -32,6 +32,12 @@ type remind struct {
 	Amount       uint   //每次服用片数
 }
 
+type position struct {
+	Time      string  // 定位时间
+	Latitude  float64 // 纬度
+	Longitude float64 // 经度
+}
+
 var db *sql.DB
 
 func remindTime() {
@@ -61,13 +67,13 @@ func remindTime() {
 
 	log.Println(reminds)
 
-	remindJson, err := json.Marshal(reminds)
+	remindJSON, err := json.Marshal(reminds)
 	checkErr(err)
-	mqtt.RemindEatMedicine(string(remindJson))
-	remindJsonIndent, err := json.MarshalIndent(reminds, "", "     ")
+	mqtt.RemindEatMedicine(string(remindJSON))
+	remindJSONIndent, err := json.MarshalIndent(reminds, "", "     ")
 	checkErr(err)
-	fmt.Println(remindJson)
-	fmt.Println(string(remindJsonIndent))
+	fmt.Println(remindJSON)
+	fmt.Println(string(remindJSONIndent))
 }
 
 func checkMedicine() {
@@ -86,12 +92,12 @@ func updateMedicine(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println(err)
 	}
-	fmt.Println(string(b))
+	log.Println(string(b))
 	m := string(b)
 	w.WriteHeader(http.StatusOK)
 	json.Unmarshal([]byte(m), &med)
-	fmt.Println(med)
-	fmt.Println(len(med))
+	log.Println(med)
+	log.Println(len(med))
 	stmt, err := db.Prepare("DELETE FROM remind")
 	res, err := stmt.Exec()
 	checkErr(err)
@@ -106,6 +112,31 @@ func updateMedicine(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(id)
 		checkErr(err)
 	}
+}
+
+//获取位置信息
+func getPosition(w http.ResponseWriter, r *http.Request) {
+	// r.ParseForm()
+	log.Print(r.RemoteAddr)
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Println(string(b))
+
+	var positionJSON position
+	json.Unmarshal(b, &positionJSON)
+	stmt, err := db.Prepare("INSERT INTO position (longitude, latitude, time) values(?, ?, ?)")
+	checkErr(err)
+
+	var res sql.Result
+	res, err = stmt.Exec(positionJSON.Longitude, positionJSON.Latitude, positionJSON.Time)
+	checkErr(err)
+
+	var id int64
+	id, err = res.LastInsertId()
+	checkErr(err)
+	log.Println(id)
 }
 
 func main() {
@@ -132,6 +163,7 @@ func main() {
 
 	//开始http监听
 	http.HandleFunc("/", updateMedicine)
+	http.HandleFunc("/updateposition", getPosition)
 	err = http.ListenAndServe(httpport, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
