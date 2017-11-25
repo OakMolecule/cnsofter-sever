@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -36,6 +37,49 @@ type position struct {
 	Time      string  // 定位时间
 	Latitude  float64 // 纬度
 	Longitude float64 // 经度
+}
+
+type basicCity struct {
+	Cid        string
+	Location   string
+	ParentCity string `json:"parent_city"`
+	AdminArea  string `json:"admin_area"`
+	Cnty       string
+	Lat        string
+	Lon        string
+	Tz         string
+}
+
+type updateTime struct {
+	Loc string
+	Utc string
+}
+
+type nowWeather struct {
+	Cloud    string
+	CondCode string `json:"cond_code"`
+	CondTxt  string `json:"cond_txt"`
+	Fl       string
+	Hum      string
+	Pcpn     string
+	Pres     string
+	Tmp      string
+	Vis      string
+	WindDeg  string `json:"wind_deg"`
+	WindDir  string `json:"wind_dir"`
+	WindSc   string `json:"wind_sc"`
+	WindSpd  string `json:"wind_spd"`
+}
+
+type weather struct {
+	Basic  basicCity
+	Update updateTime
+	Status string
+	Now    nowWeather
+}
+
+type weather6 struct {
+	HeWeather6 []weather
 }
 
 var db *sql.DB
@@ -114,8 +158,8 @@ func updateMedicine(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//获取位置信息
-func getPosition(w http.ResponseWriter, r *http.Request) {
+// 获取新位置信息
+func updatePosition(w http.ResponseWriter, r *http.Request) {
 	// r.ParseForm()
 	log.Print(r.RemoteAddr)
 	b, err := ioutil.ReadAll(r.Body)
@@ -137,6 +181,130 @@ func getPosition(w http.ResponseWriter, r *http.Request) {
 	id, err = res.LastInsertId()
 	checkErr(err)
 	log.Println(id)
+}
+
+// 返回位置信息
+func getPosition(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+
+	var sql string
+	if len(r.Form) != 0 {
+		start := r.FormValue("starttime")
+		end := r.FormValue("endtime")
+
+		fmt.Println(start)
+		fmt.Println(end)
+		sql = fmt.Sprintf("SELECT latitude, longitude, time FROM position WHERE time > '%s' AND time < '%s' ORDER BY time ASC", start, end)
+		log.Println(sql)
+	} else {
+		sql = fmt.Sprint("SELECT latitude, longitude, time FROM position ORDER BY time ASC")
+	}
+
+	var positions []position
+	rows, err := db.Query(sql)
+	checkErr(err)
+
+	for rows.Next() {
+		var latitude float64
+		var longitude float64
+		var time string
+
+		var newpositionJSON position
+
+		err = rows.Scan(&latitude, &longitude, &time)
+		if err != nil {
+			panic(err.Error()) // proper error handling instead of panic in your app
+		}
+
+		newpositionJSON.Latitude = latitude
+		newpositionJSON.Longitude = longitude
+		newpositionJSON.Time = time
+		positions = append(positions, newpositionJSON)
+	}
+
+	positionJSON, err := json.Marshal(positions)
+	checkErr(err)
+
+	w.Header().Set("Content-Type", "json; charset=utf-8")
+	fmt.Fprintf(w, string(positionJSON))
+
+	log.Println(positions)
+}
+
+// 返回位置信息
+func getPositionnow(w http.ResponseWriter, r *http.Request) {
+
+	sql := fmt.Sprint("SELECT latitude, longitude, time FROM position ORDER BY time ASC LIMIT 1")
+
+	var positions position
+	rows, err := db.Query(sql)
+	checkErr(err)
+
+	for rows.Next() {
+		var latitude float64
+		var longitude float64
+		var time string
+
+		var newpositionJSON position
+
+		err = rows.Scan(&latitude, &longitude, &time)
+		if err != nil {
+			panic(err.Error()) // proper error handling instead of panic in your app
+		}
+
+		newpositionJSON.Latitude = latitude
+		newpositionJSON.Longitude = longitude
+		newpositionJSON.Time = time
+		positions = newpositionJSON
+		break
+	}
+
+	positionJSON, err := json.Marshal(positions)
+	checkErr(err)
+
+	w.Header().Set("Content-Type", "json; charset=utf-8")
+	fmt.Fprintf(w, string(positionJSON))
+
+	log.Println(positions)
+}
+
+func getWeather(w http.ResponseWriter, r *http.Request) {
+	form := url.Values{}
+	form.Add("location", "xiqing")
+	form.Add("lang", "cn")
+	form.Add("key", "4b94ed0b862d4f4689cf94c2d4fe507f")
+
+	resp, err := http.PostForm("https://free-api.heweather.com/s6/weather/now", form)
+
+	log.Println(form.Encode())
+
+	if err != nil {
+		// handle error
+		log.Fatalf("post unmarshaling failed: %s", err)
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("ioutil.ReadAll failed: %s", err)
+		// handle error
+	}
+
+	var weathernow weather6
+	json.Unmarshal(body, &weathernow)
+
+	fmt.Fprintf(w, weathernow.HeWeather6[0].Basic.Cid+",")
+	fmt.Fprintf(w, weathernow.HeWeather6[0].Basic.Location+",")
+	fmt.Fprintf(w, weathernow.HeWeather6[0].Now.Tmp+",")
+	fmt.Fprintf(w, weathernow.HeWeather6[0].Now.WindDir+",")
+	fmt.Fprintf(w, weathernow.HeWeather6[0].Now.WindSc)
+
+	log.Println(weathernow.HeWeather6[0].Status)
+	log.Println(weathernow.HeWeather6[0].Basic.Location)
+	log.Println(weathernow.HeWeather6[0].Basic.Cid)
+	log.Println(weathernow.HeWeather6[0].Now.CondTxt)
+	log.Println(weathernow.HeWeather6[0].Now.Fl)
+	log.Println(weathernow.HeWeather6[0].Now.WindDir)
 }
 
 func main() {
@@ -163,7 +331,10 @@ func main() {
 
 	//开始http监听
 	http.HandleFunc("/", updateMedicine)
-	http.HandleFunc("/updateposition", getPosition)
+	http.HandleFunc("/updateposition", updatePosition)
+	http.HandleFunc("/getposition", getPosition)
+	http.HandleFunc("/getpositionnow", getPositionnow)
+	http.HandleFunc("/getweather", getWeather)
 	err = http.ListenAndServe(httpport, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
