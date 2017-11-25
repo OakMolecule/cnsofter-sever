@@ -234,7 +234,7 @@ func getPosition(w http.ResponseWriter, r *http.Request) {
 // 返回位置信息
 func getPositionnow(w http.ResponseWriter, r *http.Request) {
 
-	sql := fmt.Sprint("SELECT latitude, longitude, time FROM position ORDER BY time ASC LIMIT 1")
+	sql := fmt.Sprint("SELECT latitude, longitude, time FROM position ORDER BY time DESC LIMIT 1")
 
 	var positions position
 	rows, err := db.Query(sql)
